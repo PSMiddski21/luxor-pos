@@ -1,0 +1,6 @@
+{
+  "apiUrl": "https://xxxxxxxxxx.execute-api.eu-west-2.amazonaws.com",
+  "userPoolId": "eu-west-2_xxxxxxxxx",
+  "userPoolClientId": "xxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "awsRegion": "eu-west-2"
+}

@@ -1,0 +1,29 @@
+{
+  "name": "luxor-infra",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "infra": "bin/infra.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --require-approval broadcast",
+    "diff": "cdk diff",
+    "destroy": "cdk destroy"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "aws-cdk": "^2.171.0",
+    "esbuild": "^0.24.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.7.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-rds-data": "^3.700.0",
+    "aws-cdk-lib": "^2.171.0",
+    "constructs": "^10.4.2",
+    "hono": "^4.6.0",
+    "source-map-support": "^0.5.21"
+  }
+}
