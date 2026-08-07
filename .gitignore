@@ -15,6 +15,10 @@ dist-ssr
 # Deployed runtime config (real values) — public/config.example.json is the template
 public/config.json
 
+# Real cutover data (customer PII/financials) — db/import/*.example.csv are the templates
+db/import/*.csv
+!db/import/*.example.csv
+
 # CDK
 infra/cdk.out
 infra/cdk.context.json

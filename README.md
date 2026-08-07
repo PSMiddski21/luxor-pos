@@ -25,6 +25,9 @@ for the full CDK stack.
   stock levels correct atomically — the biggest risk in the original sheet
   was a free-text "80 mins left" comment that any typo could corrupt.
 - **[db/seed.sql](db/seed.sql)** — sample data for a fresh environment.
+- **[db/import/](db/import)** + **[infra/scripts/import-data.mjs](infra/scripts/import-data.mjs)**
+  — CSV-based cutover import for loading the salon's real data (see
+  "Cutover" below).
 - **[infra/](infra)** — AWS CDK (TypeScript) app defining every resource:
   Cognito, Aurora Serverless v2, the API Lambda, HTTP API, S3 + CloudFront.
 - **[infra/lambda/](infra/lambda)** — the API itself: a [Hono](https://hono.dev)
@@ -148,11 +151,56 @@ want them gone).
 1. Tighten CORS: `luxor-stack.ts` currently allows `*` for the HTTP API
    so the first deploy works before the CloudFront domain is known;
    narrow `allowOrigins` to the real `SiteUrl` afterwards.
-2. Import historical data from the old sheets into read-only archive
-   tables rather than reconciling years of free-text history into the new
-   schema.
-3. Hardware: receipt printer / cash drawer integration, barcode scanner
+2. Hardware: receipt printer / cash drawer integration, barcode scanner
    for stock intake.
-4. Consider per-staff Cognito accounts (instead of one shared till login)
+3. Consider per-staff Cognito accounts (instead of one shared till login)
    if you want clock-in/out tied to an authenticated identity rather than
    just a name picked on a shared device.
+
+## Continuous integration
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every push and
+PR: type-checks and builds the frontend, and type-checks + `cdk synth`s the
+infra/Lambda code. Neither job needs AWS credentials — `cdk synth` runs in
+environment-agnostic mode (dummy availability zones, no live lookups), the
+same way it does locally without `aws configure`. It's a check, not a
+deploy: nothing in CI touches your AWS account. Wiring up auto-deploy on
+push to `main` is a deliberate next step, not done here, since it requires
+adding AWS credentials as repo secrets yourself.
+
+## Cutover: importing real salon data
+
+Once the schema is deployed (`scripts/init-db.mjs`), replace the demo data
+from `db/seed.sql` with the salon's actual data using
+[infra/scripts/import-data.mjs](infra/scripts/import-data.mjs):
+
+1. Export each relevant tab from the Google Sheets workbook and reshape it
+   into the four CSVs the importer expects — templates with the exact
+   columns are in [db/import/*.example.csv](db/import). Copy each to the
+   same name without `.example` (e.g. `db/import/customers.csv`) and fill
+   it in. These real files are gitignored — they'll contain customer PII
+   and should never be committed.
+   - **`minutes_balance` needs a human pass.** The old sheet tracked this
+     as free text in a Comments cell (e.g. "80 mins left"), which is
+     exactly the failure mode this system replaces — someone needs to read
+     each customer's current balance off the sheet and enter it as a clean
+     integer. There's no way to script around that safely.
+2. Dry-run it — this only validates the CSVs, no DB connection needed:
+   ```bash
+   node infra/scripts/import-data.mjs --dir db/import
+   ```
+   It reports every problem at once (bad category, a stock row pointing at
+   a product name that doesn't exist, non-numeric balances, etc.) rather
+   than stopping at the first one.
+3. Once it reports all rows valid, actually import:
+   ```bash
+   node infra/scripts/import-data.mjs \
+     --cluster-arn <DbClusterArn> --secret-arn <DbSecretArn> --database luxor \
+     --dir db/import --confirm
+   ```
+   Products and stock are upserted by product name (safe to re-run as the
+   catalogue changes); customers and staff are append-only inserts, so
+   don't re-run those two against a database that already has live
+   transactions against them. Everything happens inside one Data API
+   transaction — a bad row rolls back the whole import, never a partial
+   one.

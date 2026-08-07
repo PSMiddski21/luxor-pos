@@ -40,7 +40,7 @@ create table beds (
 
 create table products (
   id           uuid primary key default gen_random_uuid(),
-  name         text not null,
+  name         text not null unique,
   category     text not null check (category in ('tanning_minutes', 'retail')),
   price_pence  integer not null check (price_pence >= 0),
   minutes      integer,           -- set when category = 'tanning_minutes' (e.g. 10, 15, 100, 200)

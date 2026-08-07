@@ -1,0 +1,6 @@
+name,category,price_pence,minutes,track_stock
+10 min session,tanning_minutes,500,10,false
+15 min session,tanning_minutes,700,15,false
+100 min pack,tanning_minutes,4000,100,false
+Vape,retail,1300,,true
+Pepsi,retail,150,,true

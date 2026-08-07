@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend:
+    name: Frontend (type-check + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  infra:
+    name: Infra + Lambda (type-check + synth)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - working-directory: infra
+        run: npm ci
+      - working-directory: infra
+        run: npx tsc --noEmit
+      # No AWS credentials in CI — this validates the stack synthesizes
+      # correctly in environment-agnostic mode (dummy AZs, no live lookups),
+      # same as it does locally without `aws configure`.
+      - working-directory: infra
+        run: npx cdk synth > /dev/null
