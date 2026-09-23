@@ -7,6 +7,7 @@ export interface Customer {
   id: string;
   name: string;
   phone?: string;
+  email?: string;
   minutesBalance: number;
   notes?: string;
 }
@@ -15,6 +16,10 @@ export interface Bed {
   id: string;
   label: string;
   status: 'available' | 'in_use' | 'maintenance';
+  // When the current session is expected to end (ISO). Set when a bed goes
+  // in_use for a timed session; the backend auto-reverts the bed to
+  // available once this passes. Absent otherwise.
+  busyUntil?: string;
 }
 
 export interface Product {
@@ -65,7 +70,7 @@ export interface CartLine {
 }
 
 export interface TransactionLine {
-  productId: string;
+  productId?: string; // absent for a costless "used prepaid minutes" line
   productName: string;
   quantity: number;
   unitPricePence: number;
@@ -80,7 +85,17 @@ export interface Transaction {
   cashPence: number;
   cardPence: number;
   totalPence: number;
+  // Customer's minutes balance immediately after this transaction. Absent
+  // when there's no customer on the sale.
+  minutesBalanceAfter?: number;
   lines: TransactionLine[];
+}
+
+// A day's transactions for the Reports "log" view — every sale and every
+// logged (costless) session, newest first.
+export interface TransactionLogEntry extends Transaction {
+  customerName?: string;
+  bedLabel?: string;
 }
 
 export const formatPence = (pence: number) =>

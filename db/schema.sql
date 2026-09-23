@@ -32,10 +32,15 @@ create table staff (
 -- ---------------------------------------------------------------------------
 
 create table beds (
-  id     uuid primary key default gen_random_uuid(),
-  label  text not null,
-  status text not null default 'available'
-         check (status in ('available', 'in_use', 'maintenance'))
+  id          uuid primary key default gen_random_uuid(),
+  label       text not null,
+  status      text not null default 'available'
+              check (status in ('available', 'in_use', 'maintenance')),
+  -- When the current timed session is expected to end. Set alongside
+  -- status = 'in_use' by checkout/use-minutes; GET /beds lazily flips the
+  -- bed back to available once this passes (see infra/lambda/routes/beds.ts)
+  -- — there's no cron in this stack, so expiry is checked on read instead.
+  busy_until  timestamptz
 );
 
 create table products (
@@ -69,16 +74,25 @@ create table transactions (
   cash_pence   integer not null default 0 check (cash_pence >= 0),
   card_pence   integer not null default 0 check (card_pence >= 0), -- card / bank transfer
   total_pence  integer not null check (total_pence >= 0),
-  notes        text
+  notes        text,
+  -- Snapshot of customer_id's minutes_balance immediately after this
+  -- transaction (post sell_product/use_minutes). Null for walk-ins/no
+  -- customer. Captured at write time, not derived later, so the Reports
+  -- transaction log can show a running "remaining minutes" per row even
+  -- though customers.minutes_balance only holds the current value.
+  minutes_balance_after integer
 );
 
 create table transaction_lines (
   id                uuid primary key default gen_random_uuid(),
   transaction_id    uuid not null references transactions(id) on delete cascade,
-  product_id        uuid not null references products(id),
+  -- null = not a product line: a costless "used prepaid minutes" session
+  -- (see use_minutes below), recorded so it shows up in the transaction
+  -- history even though nothing was sold.
+  product_id        uuid references products(id),
   quantity          integer not null default 1 check (quantity > 0),
   unit_price_pence  integer not null check (unit_price_pence >= 0),
-  minutes_applied   integer -- minutes credited to the customer's balance by this line
+  minutes_applied   integer -- minutes credited (positive) or used (negative) by this line
 );
 
 create index on transactions (occurred_at);
@@ -154,11 +168,17 @@ end;
 $$ language plpgsql;
 
 -- ---------------------------------------------------------------------------
--- use_minutes: log a bed session against a customer's *existing* prepaid
+-- use_minutes: debit a bed session from a customer's *existing* prepaid
 -- balance (no payment taken — they already paid when they bought the pack).
 -- This is distinct from sell_product, which is what credits the balance in
 -- the first place. Keeping the two separate mirrors how staff actually work
 -- the till: "sell a pack" vs. "log today's session".
+--
+-- Just the balance check/debit lives here; the caller (POST
+-- /transactions/use-minutes) wraps this in a transaction alongside a
+-- committed, zero-value transactions/transaction_lines row, so every session
+-- is recorded as a costless "sale" for the audit trail even though no
+-- payment is taken.
 -- ---------------------------------------------------------------------------
 
 create or replace function use_minutes(

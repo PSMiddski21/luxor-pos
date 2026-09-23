@@ -1,8 +1,11 @@
 import { loadConfig } from './config';
 import { getAuthHeader } from './auth';
+import { isMockConfig, mockRequest } from './mock';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const config = await loadConfig();
+  if (isMockConfig(config)) return mockRequest<T>(path, init);
+
   const authHeader = await getAuthHeader();
 
   const res = await fetch(`${config.apiUrl}${path}`, {

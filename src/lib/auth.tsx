@@ -7,6 +7,7 @@ import {
   signOut as amplifySignOut,
 } from 'aws-amplify/auth';
 import { loadConfig } from './config';
+import { isMockConfig } from './mock';
 
 interface AuthState {
   status: 'loading' | 'signed-out' | 'signed-in' | 'error';
@@ -24,8 +25,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    loadConfig()
-      .then((config) => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const config = await loadConfig();
+        if (isMockConfig(config)) {
+          if (!cancelled) {
+            setEmail('demo@luxor.local');
+            setStatus('signed-in');
+          }
+          return;
+        }
+
         Amplify.configure({
           Auth: {
             Cognito: {
@@ -34,13 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             },
           },
         });
-        return getCurrentUser();
-      })
-      .then((user) => {
-        setEmail(user.signInDetails?.loginId ?? user.username);
-        setStatus('signed-in');
-      })
-      .catch((err) => {
+        const user = await getCurrentUser();
+        if (!cancelled) {
+          setEmail(user.signInDetails?.loginId ?? user.username);
+          setStatus('signed-in');
+        }
+      } catch (err) {
+        if (cancelled) return;
         // "not signed in" resolves the same way as any other auth error from
         // getCurrentUser — only surface a hard error if config itself failed.
         if (err instanceof Error && err.message.includes('config.json')) {
@@ -49,16 +61,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setStatus('signed-out');
         }
-      });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const signIn = async (username: string, password: string) => {
+    const config = await loadConfig();
+    if (isMockConfig(config)) {
+      setEmail(username);
+      setStatus('signed-in');
+      return;
+    }
     await amplifySignIn({ username, password });
     setEmail(username);
     setStatus('signed-in');
   };
 
   const signOut = async () => {
+    const config = await loadConfig();
+    if (isMockConfig(config)) {
+      setEmail(undefined);
+      setStatus('signed-out');
+      return;
+    }
     await amplifySignOut();
     setEmail(undefined);
     setStatus('signed-out');

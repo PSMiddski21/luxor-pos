@@ -12,6 +12,26 @@ import type {
   Transaction,
 } from './types';
 
+export interface NewCustomer {
+  name: string;
+  phone?: string;
+  email?: string;
+  minutesBalance?: number;
+  notes?: string;
+}
+
+export interface CustomerImportRowResult {
+  row: number;
+  name: string;
+  action: 'created' | 'updated' | 'error';
+  error?: string;
+}
+
+export interface CustomerImportResult {
+  customers: Customer[];
+  results: CustomerImportRowResult[];
+}
+
 interface PosState {
   // Server-backed data, loaded via init()
   beds: Bed[];
@@ -32,14 +52,20 @@ interface PosState {
 
   init: () => Promise<void>;
 
+  createCustomer: (data: NewCustomer) => Promise<Customer>;
+  updateCustomer: (customerId: string, data: NewCustomer) => Promise<Customer>;
+  importCustomers: (rows: NewCustomer[]) => Promise<CustomerImportResult>;
+
   selectBed: (bedId: string | null) => void;
+  setBedStatus: (bedId: string, status: 'available' | 'maintenance') => Promise<void>;
+  refreshBeds: () => Promise<void>;
   selectCustomer: (customerId: string | null) => void;
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
   clearSale: () => void;
 
   checkout: (cashPence: number, cardPence: number) => Promise<Transaction>;
-  useMinutes: (customerId: string, bedId: string, minutes: number) => Promise<void>;
+  useMinutes: (customerId: string, bedId: string, minutes: number) => Promise<Transaction>;
 
   adjustStock: (productId: string, delta: number) => Promise<void>;
   setStockCount: (productId: string, quantity: number) => Promise<void>;
@@ -85,7 +111,46 @@ export const usePosStore = create<PosState>((set, get) => ({
     }
   },
 
+  createCustomer: async (data) => {
+    const created = await api.post<Customer>('/customers', data);
+    set((s) => ({ customers: [...s.customers, created].sort((a, b) => a.name.localeCompare(b.name)) }));
+    return created;
+  },
+
+  updateCustomer: async (customerId, data) => {
+    const updated = await api.patch<Customer>(`/customers/${customerId}`, data);
+    set((s) => ({
+      customers: s.customers
+        .map((c) => (c.id === customerId ? updated : c))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+    return updated;
+  },
+
+  importCustomers: async (rows) => {
+    const result = await api.post<CustomerImportResult>('/customers/import', { rows });
+    set({ customers: result.customers.slice().sort((a, b) => a.name.localeCompare(b.name)) });
+    return result;
+  },
+
   selectBed: (bedId) => set({ selectedBedId: bedId }),
+
+  setBedStatus: async (bedId, status) => {
+    const updated = await api.patch<Bed>(`/beds/${bedId}`, { status });
+    set((s) => ({
+      beds: s.beds.map((b) => (b.id === bedId ? updated : b)),
+      selectedBedId: s.selectedBedId === bedId && status === 'maintenance' ? null : s.selectedBedId,
+    }));
+  },
+
+  // Polled from the POS screen so a bed whose timed session has ended shows
+  // as available again without a manual reload — see beds' lazy expiry in
+  // infra/lambda/routes/beds.ts (no cron in this stack).
+  refreshBeds: async () => {
+    const beds = await api.get<Bed[]>('/beds');
+    set({ beds });
+  },
+
   selectCustomer: (customerId) => set({ selectedCustomerId: customerId }),
 
   addToCart: (product) =>
@@ -120,21 +185,30 @@ export const usePosStore = create<PosState>((set, get) => ({
       lines: state.cart.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
     });
 
-    // Re-fetch the two slices checkout can change rather than trying to
-    // reconcile balance/stock deltas on the client.
-    const [customers, stock] = await Promise.all([
+    // Re-fetch the slices checkout can change rather than trying to
+    // reconcile balance/stock/bed-status deltas on the client.
+    const [customers, stock, beds] = await Promise.all([
       api.get<Customer[]>('/customers'),
       api.get<StockItem[]>('/stock'),
+      api.get<Bed[]>('/beds'),
     ]);
 
-    set({ customers, stock, cart: [], selectedBedId: null, selectedCustomerId: null });
+    set({ customers, stock, beds, cart: [], selectedBedId: null, selectedCustomerId: null });
     return transaction;
   },
 
   useMinutes: async (customerId, bedId, minutes) => {
-    await api.post('/transactions/use-minutes', { customerId, bedId, minutes });
-    const customers = await api.get<Customer[]>('/customers');
-    set({ customers, selectedBedId: bedId });
+    const transaction = await api.post<Transaction>('/transactions/use-minutes', {
+      customerId,
+      bedId,
+      minutes,
+    });
+    const [customers, beds] = await Promise.all([
+      api.get<Customer[]>('/customers'),
+      api.get<Bed[]>('/beds'),
+    ]);
+    set({ customers, beds, selectedBedId: bedId });
+    return transaction;
   },
 
   adjustStock: async (productId, delta) => {

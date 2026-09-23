@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth';
 
 const navItems = [
   { to: '/', label: 'POS', end: true },
+  { to: '/customers', label: 'Customers' },
   { to: '/stock', label: 'Stock' },
   { to: '/rota', label: 'Rota' },
   { to: '/timesheets', label: 'Timesheets' },

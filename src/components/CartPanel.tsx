@@ -10,6 +10,7 @@ export function CartPanel() {
   const selectedCustomerId = usePosStore((s) => s.selectedCustomerId);
   const customers = usePosStore((s) => s.customers);
 
+  const [method, setMethod] = useState<'cash' | 'card' | 'split' | null>(null);
   const [cash, setCash] = useState('');
   const [lastReceipt, setLastReceipt] = useState<Transaction | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -20,19 +21,28 @@ export function CartPanel() {
     [cart],
   );
 
-  const cashPence = Math.round((parseFloat(cash || '0') || 0) * 100);
-  const cardPence = Math.max(totalPence - cashPence, 0);
+  const splitCashPence = Math.min(
+    totalPence,
+    Math.max(0, Math.round((parseFloat(cash || '0') || 0) * 100)),
+  );
+  const cashPence = method === 'cash' ? totalPence : method === 'split' ? splitCashPence : 0;
+  const cardPence = totalPence - cashPence;
   const customer = customers.find((c) => c.id === selectedCustomerId);
 
+  const selectMethod = (next: 'cash' | 'card' | 'split') => {
+    setMethod(next);
+    setError(null);
+  };
+
   const handleCheckout = async () => {
-    const effectiveCash = cashPence > totalPence ? totalPence : cashPence;
-    const effectiveCard = totalPence - effectiveCash;
+    if (!method) return;
     setError(null);
     setSubmitting(true);
     try {
-      const receipt = await checkout(effectiveCash, effectiveCard);
+      const receipt = await checkout(cashPence, cardPence);
       setLastReceipt(receipt);
       setCash('');
+      setMethod(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Checkout failed');
     } finally {
@@ -116,23 +126,55 @@ export function CartPanel() {
           <span>{formatPence(totalPence)}</span>
         </div>
 
-        <label className="text-xs text-slate-500">Cash received (£)</label>
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={cash}
-          onChange={(e) => setCash(e.target.value)}
-          placeholder="0.00"
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm mb-2"
-        />
-        <div className="text-xs text-slate-500 mb-3">Remaining on card/transfer: {formatPence(cardPence)}</div>
+        <label className="text-xs text-slate-500">Payment method</label>
+        <div className="grid grid-cols-3 gap-2 mt-1 mb-2">
+          {(
+            [
+              ['cash', 'Cash'],
+              ['card', 'Card / transfer'],
+              ['split', 'Split'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => selectMethod(value)}
+              className={`rounded-md px-2 py-2 text-xs font-medium border ${
+                method === value
+                  ? 'bg-violet-600 text-white border-violet-600'
+                  : 'bg-white text-slate-600 border-slate-300 hover:border-violet-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {method === 'split' && (
+          <>
+            <label className="text-xs text-slate-500">Cash received (£)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={cash}
+              onChange={(e) => setCash(e.target.value)}
+              placeholder="0.00"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm mb-2"
+            />
+          </>
+        )}
+        {method && (
+          <div className="text-xs text-slate-500 mb-3">
+            Cash {formatPence(cashPence)} · Card/transfer {formatPence(cardPence)}
+          </div>
+        )}
 
         {error && <div className="text-sm text-red-600 mb-2">{error}</div>}
 
         <button
           type="button"
-          disabled={cart.length === 0 || submitting}
+          disabled={cart.length === 0 || submitting || !method}
           onClick={handleCheckout}
           className="w-full rounded-lg bg-violet-600 text-white font-semibold py-3 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
         >

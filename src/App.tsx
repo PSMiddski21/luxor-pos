@@ -5,6 +5,7 @@ import { RequireAuth } from './components/RequireAuth';
 import { usePosStore } from './lib/store';
 import { Layout } from './components/Layout';
 import { PosPage } from './pages/PosPage';
+import { CustomersPage } from './pages/CustomersPage';
 import { StockPage } from './pages/StockPage';
 import { RotaPage } from './pages/RotaPage';
 import { TimesheetsPage } from './pages/TimesheetsPage';
@@ -45,6 +46,7 @@ function App() {
             <Routes>
               <Route element={<Layout />}>
                 <Route index element={<PosPage />} />
+                <Route path="customers" element={<CustomersPage />} />
                 <Route path="stock" element={<StockPage />} />
                 <Route path="rota" element={<RotaPage />} />
                 <Route path="timesheets" element={<TimesheetsPage />} />
