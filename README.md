@@ -109,7 +109,10 @@ node scripts/init-db.mjs \
   --secret-arn <DbSecretArn> \
   --database luxor
 
-# 6. Create the shared till login (Cognito)
+# 6. Create logins (Cognito). Two account types:
+#    - till: POS, Customers, Timesheets only
+#    - admin: everything, including Stock, Rota, Reports (must be added to
+#      the "admin" Cognito group — see infra/lib/luxor-stack.ts, AdminGroup)
 aws cognito-idp admin-create-user \
   --user-pool-id <UserPoolId> \
   --username till@yoursalon.co.uk \
@@ -121,9 +124,26 @@ aws cognito-idp admin-set-user-password \
   --username till@yoursalon.co.uk \
   --password 'ChooseAStrongPassword1!' \
   --permanent
+
+aws cognito-idp admin-create-user \
+  --user-pool-id <UserPoolId> \
+  --username admin@yoursalon.co.uk \
+  --user-attributes Name=email,Value=admin@yoursalon.co.uk Name=email_verified,Value=true \
+  --message-action SUPPRESS
+
+aws cognito-idp admin-set-user-password \
+  --user-pool-id <UserPoolId> \
+  --username admin@yoursalon.co.uk \
+  --password 'ChooseAnotherStrongPassword1!' \
+  --permanent
+
+aws cognito-idp admin-add-user-to-group \
+  --user-pool-id <UserPoolId> \
+  --username admin@yoursalon.co.uk \
+  --group-name admin
 ```
 
-Visit the `SiteUrl` output and sign in with that email/password.
+Visit the `SiteUrl` output and sign in with either account.
 
 ### Redeploying
 

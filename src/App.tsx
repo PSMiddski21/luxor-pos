@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './lib/auth';
 import { RequireAuth } from './components/RequireAuth';
+import { RequireAdmin } from './components/RequireAdmin';
 import { usePosStore } from './lib/store';
 import { Layout } from './components/Layout';
 import { PosPage } from './pages/PosPage';
@@ -47,10 +48,31 @@ function App() {
               <Route element={<Layout />}>
                 <Route index element={<PosPage />} />
                 <Route path="customers" element={<CustomersPage />} />
-                <Route path="stock" element={<StockPage />} />
-                <Route path="rota" element={<RotaPage />} />
                 <Route path="timesheets" element={<TimesheetsPage />} />
-                <Route path="reports" element={<ReportsPage />} />
+                <Route
+                  path="stock"
+                  element={
+                    <RequireAdmin>
+                      <StockPage />
+                    </RequireAdmin>
+                  }
+                />
+                <Route
+                  path="rota"
+                  element={
+                    <RequireAdmin>
+                      <RotaPage />
+                    </RequireAdmin>
+                  }
+                />
+                <Route
+                  path="reports"
+                  element={
+                    <RequireAdmin>
+                      <ReportsPage />
+                    </RequireAdmin>
+                  }
+                />
               </Route>
             </Routes>
           </BrowserRouter>

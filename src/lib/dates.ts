@@ -17,3 +17,16 @@ export function getCurrentWeekDates(reference = new Date()): string[] {
     return toLocalDateString(d);
   });
 }
+
+// A rolling window starting today, not aligned to the calendar week — e.g.
+// for the Timesheets page's "what's coming up" rota preview.
+export function getNextNDays(days: number, reference = new Date()): string[] {
+  const start = new Date(reference);
+  start.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: days }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return toLocalDateString(d);
+  });
+}

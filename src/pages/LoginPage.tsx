@@ -1,5 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../lib/auth';
+import { loadConfig } from '../lib/config';
+import { isMockConfig } from '../lib/mock';
 
 export function LoginPage() {
   const { signIn } = useAuth();
@@ -7,6 +9,13 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isMock, setIsMock] = useState(false);
+
+  useEffect(() => {
+    loadConfig()
+      .then((config) => setIsMock(isMockConfig(config)))
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -54,6 +63,13 @@ export function LoginPage() {
         >
           {submitting ? 'Signing in…' : 'Sign in'}
         </button>
+
+        {isMock && (
+          <p className="mt-4 text-xs text-slate-400">
+            Local preview — any password works. Use an email containing "admin" for the admin view,
+            anything else for the till view.
+          </p>
+        )}
       </form>
     </div>
   );

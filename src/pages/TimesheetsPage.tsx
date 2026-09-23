@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { usePosStore } from '../lib/store';
 import { formatPence } from '../lib/types';
+import { getNextNDays } from '../lib/dates';
 
 const formatDuration = (clockIn: string, clockOut?: string) => {
   if (!clockOut) return 'In progress';
@@ -12,12 +13,21 @@ const formatDuration = (clockIn: string, clockOut?: string) => {
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+const dayLabel = (dateStr: string) =>
+  new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
 export function TimesheetsPage() {
   const staff = usePosStore((s) => s.staff);
+  const shifts = usePosStore((s) => s.shifts);
   const timesheets = usePosStore((s) => s.timesheets);
   const clockIn = usePosStore((s) => s.clockIn);
   const clockOut = usePosStore((s) => s.clockOut);
   const [error, setError] = useState<string | null>(null);
+
+  const nextDays = useMemo(() => getNextNDays(5), []);
+  const staffWithUpcomingShifts = staff.filter((m) =>
+    shifts.some((sh) => sh.staffId === m.id && nextDays.includes(sh.date)),
+  );
 
   const activeEntryFor = (staffId: string) => timesheets.find((t) => t.staffId === staffId && !t.clockOut);
 
@@ -64,6 +74,53 @@ export function TimesheetsPage() {
           })}
         </div>
         {error && <div className="text-sm text-red-600 mt-3">{error}</div>}
+      </div>
+
+      <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Rota — next 5 days</h2>
+      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto mb-6">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 text-left">
+            <tr>
+              <th className="px-3 py-2 font-medium sticky left-0 bg-slate-50">Staff</th>
+              {nextDays.map((d) => (
+                <th key={d} className="px-3 py-2 font-medium whitespace-nowrap">
+                  {dayLabel(d)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {staffWithUpcomingShifts.map((member) => (
+              <tr key={member.id} className="border-t border-slate-100">
+                <td className="px-3 py-2 font-medium text-slate-800 sticky left-0 bg-white">
+                  {member.name}
+                </td>
+                {nextDays.map((d) => {
+                  const dayShifts = shifts.filter((sh) => sh.staffId === member.id && sh.date === d);
+                  return (
+                    <td key={d} className="px-3 py-2 align-top">
+                      {dayShifts.map((sh) => (
+                        <div
+                          key={sh.id}
+                          className="rounded-md bg-violet-50 border border-violet-200 text-violet-700 text-xs px-2 py-1 mb-1"
+                        >
+                          {sh.plannedStart}–{sh.plannedEnd}
+                        </div>
+                      ))}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            {staffWithUpcomingShifts.length === 0 && (
+              <tr>
+                <td colSpan={nextDays.length + 1} className="px-4 py-6 text-center text-slate-400">
+                  No shifts scheduled in the next 5 days.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

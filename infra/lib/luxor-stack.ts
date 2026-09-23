@@ -83,6 +83,16 @@ export class LuxorStack extends cdk.Stack {
       refreshTokenValidity: cdk.Duration.days(30),
     });
 
+    // Membership in this group is what the frontend reads (as the ID
+    // token's cognito:groups claim) to show the full admin UI — Stock,
+    // Rota, and Reports — instead of the till-only view. Anyone not in it
+    // gets the till view; there's no separate "till" group to manage.
+    new cognito.CfnUserPoolGroup(this, 'AdminGroup', {
+      userPoolId: userPool.userPoolId,
+      groupName: 'admin',
+      description: 'Full access, including Stock, Rota, and Reports',
+    });
+
     // -----------------------------------------------------------------
     // API Lambda — Hono app, talks to Aurora via the Data API
     // -----------------------------------------------------------------
