@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { usePosStore } from '../lib/store';
 import { formatPence, type TransactionLogEntry } from '../lib/types';
 
 interface ProductBreakdownRow {
@@ -44,6 +45,9 @@ const formatDateLabel = (date: string) =>
   });
 
 export function ReportsPage() {
+  const stock = usePosStore((s) => s.stock);
+  const products = usePosStore((s) => s.products);
+
   const [date, setDate] = useState(todayStr);
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [log, setLog] = useState<TransactionLogEntry[] | null>(null);
@@ -64,6 +68,20 @@ export function ReportsPage() {
   }, [date]);
 
   const isToday = date === todayStr();
+
+  const stockRows = stock
+    .map((item) => ({ item, product: products.find((p) => p.id === item.productId) }))
+    .filter((r): r is { item: (typeof stock)[number]; product: NonNullable<typeof r.product> } => !!r.product)
+    .sort((a, b) => a.product.name.localeCompare(b.product.name));
+
+  const valueAtRetailPence = stockRows.reduce((sum, r) => sum + r.product.pricePence * r.item.quantityOnHand, 0);
+  const valueAtCostPence = stockRows.reduce(
+    (sum, r) => sum + (r.product.costPricePence ?? 0) * r.item.quantityOnHand,
+    0,
+  );
+  const missingCostCount = stockRows.filter(
+    (r) => r.product.costPricePence === undefined && r.item.quantityOnHand > 0,
+  ).length;
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -169,6 +187,65 @@ export function ReportsPage() {
                 <td className="px-4 py-2 text-slate-500">{formatPence(entry.totalPence)}</td>
                 <td className="px-4 py-2 text-slate-500">
                   {entry.minutesBalanceAfter !== undefined ? `${entry.minutesBalanceAfter} min` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mt-6 mb-2">
+        Stock valuation — right now
+      </h2>
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="text-xs text-slate-500 uppercase tracking-wide">Value at cost</div>
+          <div className="text-2xl font-semibold mt-1">{formatPence(valueAtCostPence)}</div>
+          {missingCostCount > 0 && (
+            <div className="text-xs text-amber-600 mt-1">
+              {missingCostCount} item{missingCostCount > 1 ? 's' : ''} in stock with no cost price set —
+              understated
+            </div>
+          )}
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="text-xs text-slate-500 uppercase tracking-wide">Value at retail price</div>
+          <div className="text-2xl font-semibold mt-1">{formatPence(valueAtRetailPence)}</div>
+        </div>
+      </div>
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 text-left">
+            <tr>
+              <th className="px-4 py-2 font-medium">Product</th>
+              <th className="px-4 py-2 font-medium">On hand</th>
+              <th className="px-4 py-2 font-medium">Cost price</th>
+              <th className="px-4 py-2 font-medium">Value at cost</th>
+              <th className="px-4 py-2 font-medium">Value at retail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stockRows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                  No stock-tracked items.
+                </td>
+              </tr>
+            )}
+            {stockRows.map(({ item, product }) => (
+              <tr key={item.productId} className="border-t border-slate-100">
+                <td className="px-4 py-2 font-medium text-slate-800">{product.name}</td>
+                <td className="px-4 py-2 text-slate-500">{item.quantityOnHand}</td>
+                <td className="px-4 py-2 text-slate-500">
+                  {product.costPricePence !== undefined ? formatPence(product.costPricePence) : '—'}
+                </td>
+                <td className="px-4 py-2 text-slate-500">
+                  {product.costPricePence !== undefined
+                    ? formatPence(product.costPricePence * item.quantityOnHand)
+                    : '—'}
+                </td>
+                <td className="px-4 py-2 text-slate-500">
+                  {formatPence(product.pricePence * item.quantityOnHand)}
                 </td>
               </tr>
             ))}

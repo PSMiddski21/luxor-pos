@@ -18,6 +18,7 @@ export interface NewCustomer {
   email?: string;
   minutesBalance?: number;
   notes?: string;
+  termsAccepted?: boolean;
 }
 
 export interface CustomerImportRowResult {
@@ -30,6 +31,22 @@ export interface CustomerImportRowResult {
 export interface CustomerImportResult {
   customers: Customer[];
   results: CustomerImportRowResult[];
+}
+
+export interface NewStockItem {
+  name: string;
+  pricePence: number;
+  costPricePence?: number;
+  quantityOnHand?: number;
+  reorderLevel?: number;
+  supplier?: string;
+}
+
+export interface NewStaff {
+  name: string;
+  role: Staff['role'];
+  payRatePence?: number;
+  active?: boolean;
 }
 
 interface PosState {
@@ -67,9 +84,14 @@ interface PosState {
   checkout: (cashPence: number, cardPence: number) => Promise<Transaction>;
   useMinutes: (customerId: string, bedId: string, minutes: number) => Promise<Transaction>;
 
+  addStockItem: (data: NewStockItem) => Promise<void>;
   adjustStock: (productId: string, delta: number) => Promise<void>;
   setStockCount: (productId: string, quantity: number) => Promise<void>;
   setReorderLevel: (productId: string, level: number) => Promise<void>;
+  setCostPrice: (productId: string, costPricePence: number | null) => Promise<void>;
+
+  createStaff: (data: NewStaff) => Promise<Staff>;
+  updateStaff: (staffId: string, data: NewStaff) => Promise<Staff>;
 
   addShift: (shift: Omit<Shift, 'id'>) => Promise<void>;
   removeShift: (shiftId: string) => Promise<void>;
@@ -211,6 +233,14 @@ export const usePosStore = create<PosState>((set, get) => ({
     return transaction;
   },
 
+  addStockItem: async (data) => {
+    const { product, stockItem } = await api.post<{ product: Product; stockItem: StockItem }>('/stock', data);
+    set((s) => ({
+      products: [...s.products, product].sort((a, b) => a.name.localeCompare(b.name)),
+      stock: [...s.stock, stockItem],
+    }));
+  },
+
   adjustStock: async (productId, delta) => {
     const updated = await api.patch<StockItem>(`/stock/${productId}`, { delta });
     set((s) => ({ stock: s.stock.map((i) => (i.productId === productId ? updated : i)) }));
@@ -224,6 +254,29 @@ export const usePosStore = create<PosState>((set, get) => ({
   setReorderLevel: async (productId, level) => {
     const updated = await api.patch<StockItem>(`/stock/${productId}`, { reorderLevel: level });
     set((s) => ({ stock: s.stock.map((i) => (i.productId === productId ? updated : i)) }));
+  },
+
+  setCostPrice: async (productId, costPricePence) => {
+    const updated = await api.patch<Product>(`/products/${productId}`, { costPricePence });
+    set((s) => ({ products: s.products.map((p) => (p.id === productId ? updated : p)) }));
+  },
+
+  createStaff: async (data) => {
+    const created = await api.post<Staff>('/staff', data);
+    set((s) => ({ staff: [...s.staff, created].sort((a, b) => a.name.localeCompare(b.name)) }));
+    return created;
+  },
+
+  updateStaff: async (staffId, data) => {
+    const updated = await api.patch<Staff>(`/staff/${staffId}`, data);
+    set((s) => ({
+      // Deactivating drops them from the list, matching what a fresh GET
+      // /staff (active-only) would return.
+      staff: updated.active
+        ? s.staff.map((m) => (m.id === staffId ? updated : m)).sort((a, b) => a.name.localeCompare(b.name))
+        : s.staff.filter((m) => m.id !== staffId),
+    }));
+    return updated;
   },
 
   addShift: async (shift) => {

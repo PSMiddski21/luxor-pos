@@ -3,7 +3,7 @@ import { usePosStore, type CustomerImportRowResult, type NewCustomer } from '../
 import { parseCsvRecords } from '../lib/csv';
 import type { Customer } from '../lib/types';
 
-const emptyForm = { name: '', phone: '', email: '', minutesBalance: '0', notes: '' };
+const emptyForm = { name: '', phone: '', email: '', minutesBalance: '0', notes: '', termsAccepted: false };
 
 interface ParsedRow {
   rowNumber: number;
@@ -77,6 +77,7 @@ export function CustomersPage() {
       email: c.email ?? '',
       minutesBalance: String(c.minutesBalance),
       notes: c.notes ?? '',
+      termsAccepted: c.termsAccepted,
     });
     setFormError(null);
   };
@@ -97,6 +98,10 @@ export function CustomersPage() {
       setFormError('Minutes balance must be a non-negative whole number');
       return;
     }
+    if (!editingId && !form.termsAccepted) {
+      setFormError('Customer must accept the Terms & Conditions');
+      return;
+    }
 
     const data: NewCustomer = {
       name: form.name.trim(),
@@ -104,6 +109,7 @@ export function CustomersPage() {
       email: form.email.trim() || undefined,
       minutesBalance: form.minutesBalance === '' ? 0 : minutesBalance,
       notes: form.notes.trim() || undefined,
+      termsAccepted: form.termsAccepted,
     };
 
     setSaving(true);
@@ -270,6 +276,15 @@ export function CustomersPage() {
               rows={2}
               className="col-span-2 rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
+            <label className="col-span-2 flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.termsAccepted}
+                onChange={(e) => setForm((f) => ({ ...f, termsAccepted: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+              />
+              Customer accepts the Terms &amp; Conditions
+            </label>
           </div>
 
           {formError && <div className="mt-2 text-xs text-red-600">{formError}</div>}

@@ -10,6 +10,7 @@ export interface Customer {
   email?: string;
   minutesBalance: number;
   notes?: string;
+  termsAccepted: boolean;
 }
 
 export interface Bed {
@@ -27,6 +28,7 @@ export interface Product {
   name: string;
   category: ProductCategory;
   pricePence: number;
+  costPricePence?: number; // what we pay for it, for margin; not every product tracks this
   minutes?: number; // set when category = 'tanning_minutes'
   trackStock: boolean;
 }

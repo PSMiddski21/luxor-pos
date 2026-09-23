@@ -15,6 +15,7 @@ create table customers (
   email           text,
   minutes_balance integer not null default 0 check (minutes_balance >= 0),
   notes           text,
+  terms_accepted  boolean not null default false,
   created_at      timestamptz not null default now()
 );
 
@@ -44,13 +45,14 @@ create table beds (
 );
 
 create table products (
-  id           uuid primary key default gen_random_uuid(),
-  name         text not null unique,
-  category     text not null check (category in ('tanning_minutes', 'retail')),
-  price_pence  integer not null check (price_pence >= 0),
-  minutes      integer,           -- set when category = 'tanning_minutes' (e.g. 10, 15, 100, 200)
-  track_stock  boolean not null default false,
-  active       boolean not null default true
+  id               uuid primary key default gen_random_uuid(),
+  name             text not null unique,
+  category         text not null check (category in ('tanning_minutes', 'retail')),
+  price_pence      integer not null check (price_pence >= 0),
+  cost_price_pence integer check (cost_price_pence >= 0), -- what we pay for it, for margin; not every product tracks this
+  minutes          integer,           -- set when category = 'tanning_minutes' (e.g. 10, 15, 100, 200)
+  track_stock      boolean not null default false,
+  active           boolean not null default true
 );
 
 create table stock_items (

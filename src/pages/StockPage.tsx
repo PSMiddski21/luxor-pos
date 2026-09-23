@@ -2,20 +2,83 @@ import { useState } from 'react';
 import { usePosStore } from '../lib/store';
 import { formatPence } from '../lib/types';
 
+const emptyForm = { name: '', price: '', costPrice: '', quantityOnHand: '0', reorderLevel: '0', supplier: '' };
+
+const toPence = (value: string): number | undefined => {
+  const n = parseFloat(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : undefined;
+};
+
 export function StockPage() {
   const stock = usePosStore((s) => s.stock);
   const products = usePosStore((s) => s.products);
+  const addStockItem = usePosStore((s) => s.addStockItem);
   const adjustStock = usePosStore((s) => s.adjustStock);
   const setStockCount = usePosStore((s) => s.setStockCount);
   const setReorderLevel = usePosStore((s) => s.setReorderLevel);
+  const setCostPrice = usePosStore((s) => s.setCostPrice);
 
   const [editingCount, setEditingCount] = useState<Record<string, string>>({});
+  const [editingCost, setEditingCost] = useState<Record<string, string>>({});
+  const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const rows = stock
     .map((item) => ({ item, product: products.find((p) => p.id === item.productId)! }))
     .sort((a, b) => a.product.name.localeCompare(b.product.name));
 
   const lowStockCount = rows.filter((r) => r.item.quantityOnHand <= r.item.reorderLevel).length;
+
+  const commitCostPrice = (productId: string, raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+      setCostPrice(productId, null);
+    } else {
+      const pence = toPence(trimmed);
+      if (pence !== undefined) setCostPrice(productId, pence);
+    }
+    setEditingCost((s) => {
+      const next = { ...s };
+      delete next[productId];
+      return next;
+    });
+  };
+
+  const handleAddItem = async () => {
+    setFormError(null);
+    if (!form.name.trim()) {
+      setFormError('Name is required');
+      return;
+    }
+    const pricePence = toPence(form.price);
+    if (pricePence === undefined) {
+      setFormError('Price must be a non-negative number');
+      return;
+    }
+    const costPricePence = form.costPrice.trim() === '' ? undefined : toPence(form.costPrice);
+    if (form.costPrice.trim() !== '' && costPricePence === undefined) {
+      setFormError('Cost price must be a non-negative number');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await addStockItem({
+        name: form.name.trim(),
+        pricePence,
+        costPricePence,
+        quantityOnHand: Number(form.quantityOnHand) || 0,
+        reorderLevel: Number(form.reorderLevel) || 0,
+        supplier: form.supplier.trim() || undefined,
+      });
+      setForm(emptyForm);
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'Could not add item');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -28,13 +91,14 @@ export function StockPage() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-6">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-left">
             <tr>
               <th className="px-4 py-2 font-medium">Product</th>
               <th className="px-4 py-2 font-medium">Supplier</th>
               <th className="px-4 py-2 font-medium">Price</th>
+              <th className="px-4 py-2 font-medium">Cost price</th>
               <th className="px-4 py-2 font-medium">On hand</th>
               <th className="px-4 py-2 font-medium">Reorder level</th>
               <th className="px-4 py-2 font-medium">Adjust</th>
@@ -45,12 +109,28 @@ export function StockPage() {
               const low = item.quantityOnHand <= item.reorderLevel;
               const out = item.quantityOnHand <= 0;
               const editValue = editingCount[item.productId] ?? String(item.quantityOnHand);
+              const editCostValue =
+                editingCost[item.productId] ??
+                (product.costPricePence !== undefined ? (product.costPricePence / 100).toFixed(2) : '');
 
               return (
                 <tr key={item.productId} className="border-t border-slate-100">
                   <td className="px-4 py-2 font-medium text-slate-800">{product.name}</td>
                   <td className="px-4 py-2 text-slate-500">{item.supplier}</td>
                   <td className="px-4 py-2 text-slate-500">{formatPence(product.pricePence)}</td>
+                  <td className="px-4 py-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="—"
+                      value={editCostValue}
+                      onChange={(e) => setEditingCost((s) => ({ ...s, [item.productId]: e.target.value }))}
+                      onBlur={() => commitCostPrice(item.productId, editCostValue)}
+                      className="w-20 rounded-md border border-slate-300 px-2 py-1"
+                      title="What we pay for this item"
+                    />
+                  </td>
                   <td className="px-4 py-2">
                     <span
                       className={`font-semibold ${out ? 'text-red-600' : low ? 'text-amber-600' : 'text-slate-800'}`}
@@ -109,6 +189,78 @@ export function StockPage() {
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 p-4 max-w-xl">
+        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Add item</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="Name"
+            className="col-span-2 rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+          <label className="text-xs text-slate-500">
+            Price (£)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.price}
+              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Cost price (£)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.costPrice}
+              onChange={(e) => setForm((f) => ({ ...f, costPrice: e.target.value }))}
+              placeholder="Optional"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Starting quantity
+            <input
+              type="number"
+              min="0"
+              value={form.quantityOnHand}
+              onChange={(e) => setForm((f) => ({ ...f, quantityOnHand: e.target.value }))}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Reorder level
+            <input
+              type="number"
+              min="0"
+              value={form.reorderLevel}
+              onChange={(e) => setForm((f) => ({ ...f, reorderLevel: e.target.value }))}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+          </label>
+          <input
+            value={form.supplier}
+            onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}
+            placeholder="Supplier"
+            className="col-span-2 rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
+
+        {formError && <div className="mt-2 text-xs text-red-600">{formError}</div>}
+
+        <button
+          type="button"
+          onClick={handleAddItem}
+          disabled={saving}
+          className="mt-3 rounded-lg bg-violet-600 text-white font-semibold px-4 py-2 text-sm hover:bg-violet-700 disabled:opacity-50"
+        >
+          {saving ? 'Adding…' : 'Add item'}
+        </button>
       </div>
     </div>
   );

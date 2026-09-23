@@ -4,7 +4,8 @@ import { query, withTransaction } from '../db';
 const app = new Hono();
 
 const CUSTOMER_SELECT = `
-  select id, name, phone, email, minutes_balance as "minutesBalance", notes
+  select id, name, phone, email, minutes_balance as "minutesBalance", notes,
+         terms_accepted as "termsAccepted"
   from customers
 `;
 
@@ -19,14 +20,15 @@ interface CustomerBody {
   email?: string;
   minutesBalance?: number;
   notes?: string;
+  termsAccepted?: boolean;
 }
 
 app.post('/', async (c) => {
   const body = await c.req.json<CustomerBody>();
   const [row] = await query(
     `with inserted as (
-       insert into customers (name, phone, email, minutes_balance, notes)
-       values (:name, :phone, :email, :minutesBalance, :notes)
+       insert into customers (name, phone, email, minutes_balance, notes, terms_accepted)
+       values (:name, :phone, :email, :minutesBalance, :notes, :termsAccepted)
        returning id
      )
      ${CUSTOMER_SELECT} where id = (select id from inserted)`,
@@ -36,6 +38,7 @@ app.post('/', async (c) => {
       email: body.email ?? null,
       minutesBalance: body.minutesBalance ?? 0,
       notes: body.notes ?? null,
+      termsAccepted: body.termsAccepted ?? false,
     },
   );
   return c.json(row, 201);
@@ -62,6 +65,12 @@ app.patch('/:id', async (c) => {
   }
   if ('notes' in body) {
     await query(`update customers set notes = :notes where id = :id`, { id, notes: body.notes ?? null });
+  }
+  if (typeof body.termsAccepted === 'boolean') {
+    await query(`update customers set terms_accepted = :termsAccepted where id = :id`, {
+      id,
+      termsAccepted: body.termsAccepted,
+    });
   }
 
   const [row] = await query(`${CUSTOMER_SELECT} where id = :id`, { id });

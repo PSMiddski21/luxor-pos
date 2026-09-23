@@ -32,18 +32,32 @@ const beds: Bed[] = [
 ];
 
 const customers: Customer[] = [
-  { id: 'cust-1', name: 'Amy Clarke', phone: '07700 900001', minutesBalance: 120, notes: 'Prefers bed 1' },
-  { id: 'cust-2', name: 'Jordan Lee', phone: '07700 900002', minutesBalance: 30 },
-  { id: 'cust-3', name: 'Priya Shah', phone: '07700 900003', minutesBalance: 0, notes: 'New customer' },
+  {
+    id: 'cust-1',
+    name: 'Amy Clarke',
+    phone: '07700 900001',
+    minutesBalance: 120,
+    notes: 'Prefers bed 1',
+    termsAccepted: true,
+  },
+  { id: 'cust-2', name: 'Jordan Lee', phone: '07700 900002', minutesBalance: 30, termsAccepted: true },
+  {
+    id: 'cust-3',
+    name: 'Priya Shah',
+    phone: '07700 900003',
+    minutesBalance: 0,
+    notes: 'New customer',
+    termsAccepted: false,
+  },
 ];
 
 const products: Product[] = [
   { id: 'prod-1', name: '6 min tan', category: 'tanning_minutes', pricePence: 600, minutes: 6, trackStock: false },
   { id: 'prod-2', name: '12 min tan', category: 'tanning_minutes', pricePence: 1100, minutes: 12, trackStock: false },
   { id: 'prod-3', name: '30 min tan', category: 'tanning_minutes', pricePence: 2200, minutes: 30, trackStock: false },
-  { id: 'prod-4', name: 'Accelerator lotion', category: 'retail', pricePence: 1850, trackStock: true },
-  { id: 'prod-5', name: 'After-sun moisturiser', category: 'retail', pricePence: 1200, trackStock: true },
-  { id: 'prod-6', name: 'Disposable eyewear', category: 'retail', pricePence: 150, trackStock: true },
+  { id: 'prod-4', name: 'Accelerator lotion', category: 'retail', pricePence: 1850, costPricePence: 900, trackStock: true },
+  { id: 'prod-5', name: 'After-sun moisturiser', category: 'retail', pricePence: 1200, costPricePence: 550, trackStock: true },
+  { id: 'prod-6', name: 'Disposable eyewear', category: 'retail', pricePence: 150, costPricePence: 40, trackStock: true },
 ];
 
 const stock: StockItem[] = [
@@ -123,6 +137,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       email: body.email || undefined,
       minutesBalance: body.minutesBalance ?? 0,
       notes: body.notes || undefined,
+      termsAccepted: body.termsAccepted ?? false,
     };
     customers.push(created);
     return clone(created) as T;
@@ -137,6 +152,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     if ('email' in body) cust.email = body.email || undefined;
     if (typeof body.minutesBalance === 'number') cust.minutesBalance = body.minutesBalance;
     if ('notes' in body) cust.notes = body.notes || undefined;
+    if (typeof body.termsAccepted === 'boolean') cust.termsAccepted = body.termsAccepted;
     return clone(cust) as T;
   }
 
@@ -165,6 +181,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
           email: r.email || undefined,
           minutesBalance: r.minutesBalance ?? 0,
           notes: r.notes || undefined,
+          termsAccepted: false,
         };
         customers.push(created);
         results.push({ row: i + 1, name: created.name, action: 'created' });
@@ -174,8 +191,88 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     return { customers: clone(customers), results } as T;
   }
   if (method === 'GET' && basePath === '/products') return clone(products) as T;
+
+  const productMatch = basePath.match(/^\/products\/(.+)$/);
+  if (method === 'PATCH' && productMatch) {
+    const product = products.find((p) => p.id === productMatch[1]);
+    if (!product) throw new Error('Product not found');
+    if ('costPricePence' in body) {
+      if (body.costPricePence !== null && (typeof body.costPricePence !== 'number' || body.costPricePence < 0)) {
+        throw new Error('costPricePence must be a non-negative number or null');
+      }
+      product.costPricePence = body.costPricePence ?? undefined;
+    }
+    return clone(product) as T;
+  }
+
   if (method === 'GET' && basePath === '/stock') return clone(stock) as T;
+
+  if (method === 'POST' && basePath === '/stock') {
+    const name = (body.name ?? '').trim();
+    if (!name) throw new Error('Name is required');
+    if (typeof body.pricePence !== 'number' || body.pricePence < 0) {
+      throw new Error('Price must be a non-negative number');
+    }
+    if (products.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+      throw new Error(`An item named "${name}" already exists`);
+    }
+
+    const product: Product = {
+      id: genId(),
+      name,
+      category: 'retail',
+      pricePence: body.pricePence,
+      costPricePence: typeof body.costPricePence === 'number' ? body.costPricePence : undefined,
+      trackStock: true,
+    };
+    const stockItem: StockItem = {
+      productId: product.id,
+      quantityOnHand: body.quantityOnHand ?? 0,
+      reorderLevel: body.reorderLevel ?? 0,
+      supplier: body.supplier || undefined,
+    };
+    products.push(product);
+    stock.push(stockItem);
+    return clone({ product, stockItem }) as T;
+  }
   if (method === 'GET' && basePath === '/staff') return clone(staff) as T;
+
+  if (method === 'POST' && basePath === '/staff') {
+    const name = (body.name ?? '').trim();
+    if (!name) throw new Error('Name is required');
+    if (!['owner', 'manager', 'staff'].includes(body.role)) {
+      throw new Error('role must be owner, manager, or staff');
+    }
+    const created: Staff = {
+      id: genId(),
+      name,
+      role: body.role,
+      payRatePence: body.payRatePence ?? 0,
+      active: true,
+    };
+    staff.push(created);
+    return clone(created) as T;
+  }
+
+  const staffMatch = basePath.match(/^\/staff\/(.+)$/);
+  if (method === 'PATCH' && staffMatch) {
+    const member = staff.find((m) => m.id === staffMatch[1]);
+    if (!member) throw new Error('Staff member not found');
+    if (typeof body.name === 'string') {
+      if (!body.name.trim()) throw new Error('Name is required');
+      member.name = body.name.trim();
+    }
+    if (typeof body.role === 'string') {
+      if (!['owner', 'manager', 'staff'].includes(body.role)) {
+        throw new Error('role must be owner, manager, or staff');
+      }
+      member.role = body.role;
+    }
+    if (typeof body.payRatePence === 'number') member.payRatePence = body.payRatePence;
+    if (typeof body.active === 'boolean') member.active = body.active;
+    return clone(member) as T;
+  }
+
   if (method === 'GET' && basePath === '/shifts') return clone(shifts) as T;
   if (method === 'GET' && basePath === '/timesheets') return clone(timesheets) as T;
 
