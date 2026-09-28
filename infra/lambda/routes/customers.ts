@@ -5,12 +5,12 @@ const app = new Hono();
 
 const CUSTOMER_SELECT = `
   select id, name, phone, email, minutes_balance as "minutesBalance", notes,
-         terms_accepted as "termsAccepted"
+         terms_accepted as "termsAccepted", active
   from customers
 `;
 
 app.get('/', async (c) => {
-  const rows = await query(`${CUSTOMER_SELECT} order by name`);
+  const rows = await query(`${CUSTOMER_SELECT} where active order by name`);
   return c.json(rows);
 });
 
@@ -21,6 +21,7 @@ interface CustomerBody {
   minutesBalance?: number;
   notes?: string;
   termsAccepted?: boolean;
+  active?: boolean;
 }
 
 app.post('/', async (c) => {
@@ -72,6 +73,9 @@ app.patch('/:id', async (c) => {
       id,
       termsAccepted: body.termsAccepted,
     });
+  }
+  if (typeof body.active === 'boolean') {
+    await query(`update customers set active = :active where id = :id::uuid`, { id, active: body.active });
   }
 
   const [row] = await query(`${CUSTOMER_SELECT} where id = :id::uuid`, { id });
@@ -144,7 +148,7 @@ app.post('/import', async (c) => {
     }
   });
 
-  const customers = await query(`${CUSTOMER_SELECT} order by name`);
+  const customers = await query(`${CUSTOMER_SELECT} where active order by name`);
   return c.json({ customers, results });
 });
 

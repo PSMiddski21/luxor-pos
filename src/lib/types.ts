@@ -11,6 +11,7 @@ export interface Customer {
   minutesBalance: number;
   notes?: string;
   termsAccepted: boolean;
+  active: boolean;
 }
 
 export interface Bed {

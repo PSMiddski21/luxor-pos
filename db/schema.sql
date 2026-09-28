@@ -16,6 +16,7 @@ create table customers (
   minutes_balance integer not null default 0 check (minutes_balance >= 0),
   notes           text,
   terms_accepted  boolean not null default false,
+  active          boolean not null default true,
   created_at      timestamptz not null default now()
 );
 

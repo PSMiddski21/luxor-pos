@@ -88,6 +88,12 @@ export function CustomersPage() {
     setFormError(null);
   };
 
+  const handleRemove = async (c: Customer) => {
+    if (!window.confirm(`Remove ${c.name} from customers?`)) return;
+    await updateCustomer(c.id, { name: c.name, active: false });
+    if (editingId === c.id) cancelEdit();
+  };
+
   const handleSubmit = async () => {
     if (!form.name.trim()) {
       setFormError('Name is required');
@@ -217,9 +223,16 @@ export function CustomersPage() {
                   <button
                     type="button"
                     onClick={() => startEdit(c)}
-                    className="text-xs text-violet-700 underline"
+                    className="text-xs text-violet-700 underline mr-3"
                   >
                     Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(c)}
+                    className="text-xs text-red-600 underline"
+                  >
+                    Remove
                   </button>
                 </td>
               </tr>

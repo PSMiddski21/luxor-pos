@@ -39,8 +39,9 @@ const customers: Customer[] = [
     minutesBalance: 120,
     notes: 'Prefers bed 1',
     termsAccepted: true,
+    active: true,
   },
-  { id: 'cust-2', name: 'Jordan Lee', phone: '07700 900002', minutesBalance: 30, termsAccepted: true },
+  { id: 'cust-2', name: 'Jordan Lee', phone: '07700 900002', minutesBalance: 30, termsAccepted: true, active: true },
   {
     id: 'cust-3',
     name: 'Priya Shah',
@@ -48,6 +49,7 @@ const customers: Customer[] = [
     minutesBalance: 0,
     notes: 'New customer',
     termsAccepted: false,
+    active: true,
   },
 ];
 
@@ -127,7 +129,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     return clone(bed) as T;
   }
 
-  if (method === 'GET' && basePath === '/customers') return clone(customers) as T;
+  if (method === 'GET' && basePath === '/customers') return clone(customers.filter((c) => c.active)) as T;
 
   if (method === 'POST' && basePath === '/customers') {
     const created: Customer = {
@@ -138,6 +140,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       minutesBalance: body.minutesBalance ?? 0,
       notes: body.notes || undefined,
       termsAccepted: body.termsAccepted ?? false,
+      active: true,
     };
     customers.push(created);
     return clone(created) as T;
@@ -153,6 +156,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
     if (typeof body.minutesBalance === 'number') cust.minutesBalance = body.minutesBalance;
     if ('notes' in body) cust.notes = body.notes || undefined;
     if (typeof body.termsAccepted === 'boolean') cust.termsAccepted = body.termsAccepted;
+    if (typeof body.active === 'boolean') cust.active = body.active;
     return clone(cust) as T;
   }
 
@@ -182,13 +186,14 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
           minutesBalance: r.minutesBalance ?? 0,
           notes: r.notes || undefined,
           termsAccepted: false,
+          active: true,
         };
         customers.push(created);
         results.push({ row: i + 1, name: created.name, action: 'created' });
       }
     });
 
-    return { customers: clone(customers), results } as T;
+    return { customers: clone(customers.filter((c) => c.active)), results } as T;
   }
   if (method === 'GET' && basePath === '/products') return clone(products.filter((p) => p.active)) as T;
 

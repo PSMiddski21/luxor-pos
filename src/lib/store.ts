@@ -19,6 +19,7 @@ export interface NewCustomer {
   minutesBalance?: number;
   notes?: string;
   termsAccepted?: boolean;
+  active?: boolean;
 }
 
 export interface CustomerImportRowResult {
@@ -159,9 +160,11 @@ export const usePosStore = create<PosState>((set, get) => ({
   updateCustomer: async (customerId, data) => {
     const updated = await api.patch<Customer>(`/customers/${customerId}`, data);
     set((s) => ({
-      customers: s.customers
-        .map((c) => (c.id === customerId ? updated : c))
-        .sort((a, b) => a.name.localeCompare(b.name)),
+      // Deactivating drops them from the list, matching what a fresh GET
+      // /customers (active-only) would return.
+      customers: updated.active
+        ? s.customers.map((c) => (c.id === customerId ? updated : c)).sort((a, b) => a.name.localeCompare(b.name))
+        : s.customers.filter((c) => c.id !== customerId),
     }));
     return updated;
   },
