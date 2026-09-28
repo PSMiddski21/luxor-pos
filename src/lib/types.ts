@@ -31,6 +31,7 @@ export interface Product {
   costPricePence?: number; // what we pay for it, for margin; not every product tracks this
   minutes?: number; // set when category = 'tanning_minutes'
   trackStock: boolean;
+  active: boolean;
 }
 
 export interface StockItem {

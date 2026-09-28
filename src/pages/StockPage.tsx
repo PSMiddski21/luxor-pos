@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { usePosStore } from '../lib/store';
-import { formatPence } from '../lib/types';
+import { formatPence, type Product } from '../lib/types';
 
 const emptyForm = { name: '', price: '', costPrice: '', quantityOnHand: '0', reorderLevel: '0', supplier: '' };
+const emptyTanningForm = { name: '', price: '', minutes: '' };
 
 const toPence = (value: string): number | undefined => {
   const n = parseFloat(value);
@@ -17,12 +18,77 @@ export function StockPage() {
   const setStockCount = usePosStore((s) => s.setStockCount);
   const setReorderLevel = usePosStore((s) => s.setReorderLevel);
   const setCostPrice = usePosStore((s) => s.setCostPrice);
+  const createTanningProduct = usePosStore((s) => s.createTanningProduct);
+  const updateProduct = usePosStore((s) => s.updateProduct);
 
   const [editingCount, setEditingCount] = useState<Record<string, string>>({});
   const [editingCost, setEditingCost] = useState<Record<string, string>>({});
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const tanningProducts = products
+    .filter((p) => p.category === 'tanning_minutes')
+    .sort((a, b) => (a.minutes ?? 0) - (b.minutes ?? 0));
+
+  const [editingTanningId, setEditingTanningId] = useState<string | null>(null);
+  const [tanningForm, setTanningForm] = useState(emptyTanningForm);
+  const [tanningFormError, setTanningFormError] = useState<string | null>(null);
+  const [savingTanning, setSavingTanning] = useState(false);
+
+  const startEditTanning = (product: Product) => {
+    setEditingTanningId(product.id);
+    setTanningForm({
+      name: product.name,
+      price: (product.pricePence / 100).toFixed(2),
+      minutes: String(product.minutes ?? ''),
+    });
+    setTanningFormError(null);
+  };
+
+  const cancelEditTanning = () => {
+    setEditingTanningId(null);
+    setTanningForm(emptyTanningForm);
+    setTanningFormError(null);
+  };
+
+  const handleTanningSubmit = async () => {
+    if (!tanningForm.name.trim()) {
+      setTanningFormError('Name is required');
+      return;
+    }
+    const pricePence = toPence(tanningForm.price);
+    if (pricePence === undefined) {
+      setTanningFormError('Price must be a non-negative number');
+      return;
+    }
+    const minutes = Number(tanningForm.minutes);
+    if (!Number.isInteger(minutes) || minutes <= 0) {
+      setTanningFormError('Minutes must be a positive whole number');
+      return;
+    }
+
+    setSavingTanning(true);
+    setTanningFormError(null);
+    try {
+      if (editingTanningId) {
+        await updateProduct(editingTanningId, { name: tanningForm.name.trim(), pricePence, minutes });
+      } else {
+        await createTanningProduct({ name: tanningForm.name.trim(), pricePence, minutes });
+      }
+      cancelEditTanning();
+    } catch (e) {
+      setTanningFormError(e instanceof Error ? e.message : 'Could not save tanning package');
+    } finally {
+      setSavingTanning(false);
+    }
+  };
+
+  const handleDeactivateTanning = async (product: Product) => {
+    if (!window.confirm(`Remove "${product.name}" from tanning packages?`)) return;
+    await updateProduct(product.id, { active: false });
+    if (editingTanningId === product.id) cancelEditTanning();
+  };
 
   const rows = stock
     .map((item) => ({ item, product: products.find((p) => p.id === item.productId)! }))
@@ -189,6 +255,110 @@ export function StockPage() {
             })}
           </tbody>
         </table>
+      </div>
+
+      <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Tanning minutes</h2>
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden mb-6">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500 text-left">
+            <tr>
+              <th className="px-4 py-2 font-medium">Name</th>
+              <th className="px-4 py-2 font-medium">Minutes</th>
+              <th className="px-4 py-2 font-medium">Price</th>
+              <th className="px-4 py-2 font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {tanningProducts.map((product) => (
+              <tr key={product.id} className="border-t border-slate-100">
+                <td className="px-4 py-2 font-medium text-slate-800">{product.name}</td>
+                <td className="px-4 py-2 text-slate-500">{product.minutes} min</td>
+                <td className="px-4 py-2 text-slate-500">{formatPence(product.pricePence)}</td>
+                <td className="px-4 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => startEditTanning(product)}
+                    className="text-xs text-violet-700 underline mr-3"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeactivateTanning(product)}
+                    className="text-xs text-red-600 underline"
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {tanningProducts.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                  No tanning packages yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 p-4 max-w-xl mb-6">
+        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+          {editingTanningId ? 'Edit tanning package' : 'Add tanning package'}
+        </h2>
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            value={tanningForm.name}
+            onChange={(e) => setTanningForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="Name"
+            className="col-span-2 rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+          <label className="text-xs text-slate-500">
+            Minutes
+            <input
+              type="number"
+              min="1"
+              step="5"
+              value={tanningForm.minutes}
+              onChange={(e) => setTanningForm((f) => ({ ...f, minutes: e.target.value }))}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+          </label>
+          <label className="text-xs text-slate-500">
+            Price (£)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={tanningForm.price}
+              onChange={(e) => setTanningForm((f) => ({ ...f, price: e.target.value }))}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+          </label>
+        </div>
+
+        {tanningFormError && <div className="mt-2 text-xs text-red-600">{tanningFormError}</div>}
+
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={handleTanningSubmit}
+            disabled={savingTanning}
+            className="rounded-lg bg-violet-600 text-white font-semibold px-4 py-2 text-sm hover:bg-violet-700 disabled:opacity-50"
+          >
+            {editingTanningId ? 'Save changes' : 'Add tanning package'}
+          </button>
+          {editingTanningId && (
+            <button
+              type="button"
+              onClick={cancelEditTanning}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 max-w-xl">

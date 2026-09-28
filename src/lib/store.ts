@@ -49,6 +49,20 @@ export interface NewStaff {
   active?: boolean;
 }
 
+export interface NewTanningProduct {
+  name: string;
+  pricePence: number;
+  minutes: number;
+}
+
+export interface ProductUpdate {
+  name?: string;
+  pricePence?: number;
+  minutes?: number;
+  costPricePence?: number | null;
+  active?: boolean;
+}
+
 interface PosState {
   // Server-backed data, loaded via init()
   beds: Bed[];
@@ -89,6 +103,9 @@ interface PosState {
   setStockCount: (productId: string, quantity: number) => Promise<void>;
   setReorderLevel: (productId: string, level: number) => Promise<void>;
   setCostPrice: (productId: string, costPricePence: number | null) => Promise<void>;
+
+  createTanningProduct: (data: NewTanningProduct) => Promise<Product>;
+  updateProduct: (productId: string, data: ProductUpdate) => Promise<Product>;
 
   createStaff: (data: NewStaff) => Promise<Staff>;
   updateStaff: (staffId: string, data: NewStaff) => Promise<Staff>;
@@ -259,6 +276,24 @@ export const usePosStore = create<PosState>((set, get) => ({
   setCostPrice: async (productId, costPricePence) => {
     const updated = await api.patch<Product>(`/products/${productId}`, { costPricePence });
     set((s) => ({ products: s.products.map((p) => (p.id === productId ? updated : p)) }));
+  },
+
+  createTanningProduct: async (data) => {
+    const created = await api.post<Product>('/products', data);
+    set((s) => ({ products: [...s.products, created].sort((a, b) => a.name.localeCompare(b.name)) }));
+    return created;
+  },
+
+  updateProduct: async (productId, data) => {
+    const updated = await api.patch<Product>(`/products/${productId}`, data);
+    set((s) => ({
+      // Deactivating drops it from the list, matching what a fresh GET
+      // /products (active-only) would return.
+      products: updated.active
+        ? s.products.map((p) => (p.id === productId ? updated : p)).sort((a, b) => a.name.localeCompare(b.name))
+        : s.products.filter((p) => p.id !== productId),
+    }));
+    return updated;
   },
 
   createStaff: async (data) => {

@@ -70,7 +70,7 @@ app.post('/', async (c) => {
 
   const [product] = await query(
     `select id, name, category, price_pence as "pricePence",
-            cost_price_pence as "costPricePence", minutes, track_stock as "trackStock"
+            cost_price_pence as "costPricePence", minutes, track_stock as "trackStock", active
      from products where id = :id`,
     { id: productId },
   );

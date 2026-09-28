@@ -52,12 +52,12 @@ const customers: Customer[] = [
 ];
 
 const products: Product[] = [
-  { id: 'prod-1', name: '6 min tan', category: 'tanning_minutes', pricePence: 600, minutes: 6, trackStock: false },
-  { id: 'prod-2', name: '12 min tan', category: 'tanning_minutes', pricePence: 1100, minutes: 12, trackStock: false },
-  { id: 'prod-3', name: '30 min tan', category: 'tanning_minutes', pricePence: 2200, minutes: 30, trackStock: false },
-  { id: 'prod-4', name: 'Accelerator lotion', category: 'retail', pricePence: 1850, costPricePence: 900, trackStock: true },
-  { id: 'prod-5', name: 'After-sun moisturiser', category: 'retail', pricePence: 1200, costPricePence: 550, trackStock: true },
-  { id: 'prod-6', name: 'Disposable eyewear', category: 'retail', pricePence: 150, costPricePence: 40, trackStock: true },
+  { id: 'prod-1', name: '6 min tan', category: 'tanning_minutes', pricePence: 600, minutes: 6, trackStock: false, active: true },
+  { id: 'prod-2', name: '12 min tan', category: 'tanning_minutes', pricePence: 1100, minutes: 12, trackStock: false, active: true },
+  { id: 'prod-3', name: '30 min tan', category: 'tanning_minutes', pricePence: 2200, minutes: 30, trackStock: false, active: true },
+  { id: 'prod-4', name: 'Accelerator lotion', category: 'retail', pricePence: 1850, costPricePence: 900, trackStock: true, active: true },
+  { id: 'prod-5', name: 'After-sun moisturiser', category: 'retail', pricePence: 1200, costPricePence: 550, trackStock: true, active: true },
+  { id: 'prod-6', name: 'Disposable eyewear', category: 'retail', pricePence: 150, costPricePence: 40, trackStock: true, active: true },
 ];
 
 const stock: StockItem[] = [
@@ -190,18 +190,58 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
 
     return { customers: clone(customers), results } as T;
   }
-  if (method === 'GET' && basePath === '/products') return clone(products) as T;
+  if (method === 'GET' && basePath === '/products') return clone(products.filter((p) => p.active)) as T;
+
+  if (method === 'POST' && basePath === '/products') {
+    const name = (body.name ?? '').trim();
+    if (!name) throw new Error('Name is required');
+    if (typeof body.pricePence !== 'number' || body.pricePence < 0) {
+      throw new Error('Price must be a non-negative number');
+    }
+    if (!Number.isInteger(body.minutes) || body.minutes <= 0) {
+      throw new Error('Minutes must be a positive whole number');
+    }
+    if (products.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+      throw new Error(`A product named "${name}" already exists`);
+    }
+    const created: Product = {
+      id: genId(),
+      name,
+      category: 'tanning_minutes',
+      pricePence: body.pricePence,
+      minutes: body.minutes,
+      trackStock: false,
+      active: true,
+    };
+    products.push(created);
+    return clone(created) as T;
+  }
 
   const productMatch = basePath.match(/^\/products\/(.+)$/);
   if (method === 'PATCH' && productMatch) {
     const product = products.find((p) => p.id === productMatch[1]);
     if (!product) throw new Error('Product not found');
+    if (typeof body.name === 'string') {
+      if (!body.name.trim()) throw new Error('Name is required');
+      product.name = body.name.trim();
+    }
+    if (typeof body.pricePence === 'number') {
+      if (body.pricePence < 0) throw new Error('Price must be a non-negative number');
+      product.pricePence = body.pricePence;
+    }
+    if (typeof body.minutes === 'number') {
+      if (!Number.isInteger(body.minutes) || body.minutes <= 0) {
+        throw new Error('Minutes must be a positive whole number');
+      }
+      product.minutes = body.minutes;
+    }
     if ('costPricePence' in body) {
       if (body.costPricePence !== null && (typeof body.costPricePence !== 'number' || body.costPricePence < 0)) {
         throw new Error('costPricePence must be a non-negative number or null');
       }
       product.costPricePence = body.costPricePence ?? undefined;
     }
+    if (typeof body.active === 'boolean') product.active = body.active;
     return clone(product) as T;
   }
 
@@ -224,6 +264,7 @@ export async function mockRequest<T>(path: string, init?: RequestInit): Promise<
       pricePence: body.pricePence,
       costPricePence: typeof body.costPricePence === 'number' ? body.costPricePence : undefined,
       trackStock: true,
+      active: true,
     };
     const stockItem: StockItem = {
       productId: product.id,
