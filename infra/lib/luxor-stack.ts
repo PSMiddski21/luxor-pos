@@ -151,9 +151,12 @@ export class LuxorStack extends cdk.Stack {
       defaultAuthorizer: authorizer,
     });
 
+    // Explicit methods rather than ANY — ANY matches OPTIONS too, which
+    // would shadow API Gateway's automatic CORS preflight handling with
+    // this route's Cognito authorizer and make every preflight 401.
     httpApi.addRoutes({
       path: '/{proxy+}',
-      methods: [apigw.HttpMethod.ANY],
+      methods: [apigw.HttpMethod.GET, apigw.HttpMethod.POST, apigw.HttpMethod.PATCH, apigw.HttpMethod.DELETE],
       integration: new apigwIntegrations.HttpLambdaIntegration('ApiIntegration', apiLambda),
     });
 
