@@ -204,15 +204,19 @@ export class LuxorStack extends cdk.Stack {
     });
 
     // Deploy the Vite build output. Run `npm run build` in the project root
-    // before `cdk deploy` so ../dist exists. config.json is excluded here —
-    // Vite copies public/config.json (a local dev placeholder) into dist/
-    // verbatim, and without this exclusion it's a coin flip against the
-    // DeployConfig write below for which one CloudFormation applies last.
+    // before `cdk deploy` so ../dist exists. config.json is excluded from
+    // this source — Vite copies public/config.json (a local dev placeholder)
+    // into dist/ verbatim, and DeployConfig below is its real source of
+    // truth. prune is off too: DeployConfig only re-runs when its generated
+    // content actually changes, so if this deployment pruned on every run,
+    // it would delete config.json on any deploy where DeployConfig itself
+    // had nothing new to write.
     new s3deploy.BucketDeployment(this, 'DeploySite', {
       sources: [s3deploy.Source.asset(path.join(__dirname, '..', '..', 'dist'), { exclude: ['config.json'] })],
       destinationBucket: siteBucket,
       distribution,
       distributionPaths: ['/*'],
+      prune: false,
     });
 
     // Runtime config the frontend fetches at startup — values are only
