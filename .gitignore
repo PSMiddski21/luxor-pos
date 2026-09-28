@@ -21,7 +21,8 @@ db/import/*.csv
 
 # CDK
 infra/cdk.out
-infra/cdk.context.json
+# infra/cdk.context.json is committed (not ignored) — HostedZone.fromLookup
+# needs it cached so `cdk synth` works in CI, which has no AWS credentials.
 infra/dist
 infra/*.js
 infra/**/*.js

@@ -14,6 +14,18 @@ import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+
+export interface LuxorStackProps extends cdk.StackProps {
+  /** Route 53 zone the site's custom domain lives in, e.g. "jmluxor.app". */
+  rootDomainName: string;
+  /** Full custom domain for the site, e.g. "pos.jmluxor.app". */
+  siteDomainName: string;
+  /** us-east-1 ACM certificate for siteDomainName — see bin/infra.ts. */
+  siteCertificate: acm.ICertificate;
+}
 
 /**
  * Serverless stack for the Luxor salon system.
@@ -23,7 +35,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
  * a single small-business site with low, spiky traffic.
  */
 export class LuxorStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: LuxorStackProps) {
     super(scope, id, props);
 
     const databaseName = 'luxor';
@@ -42,7 +54,11 @@ export class LuxorStack extends cdk.Stack {
 
     const dbCluster = new rds.DatabaseCluster(this, 'Database', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_16_4,
+        // 16.4 was retired from creatable versions in eu-west-2; 16.13 is
+        // the newest 16.x this aws-cdk-lib version has a constant for that
+        // AWS still offers here (checked via `aws rds
+        // describe-db-engine-versions --engine aurora-postgresql`).
+        version: rds.AuroraPostgresEngineVersion.VER_16_13,
       }),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -150,8 +166,18 @@ export class LuxorStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
+    // Custom domain — jmluxor.app's zone already exists in Route 53
+    // (registered there). The certificate itself lives in a separate
+    // us-east-1 stack (see bin/infra.ts) since CloudFront only accepts ACM
+    // certs from that region; it's passed in via props.
+    const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
+      domainName: props.rootDomainName,
+    });
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultRootObject: 'index.html',
+      domainNames: [props.siteDomainName],
+      certificate: props.siteCertificate,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -161,6 +187,20 @@ export class LuxorStack extends cdk.Stack {
         { httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html' },
         { httpStatus: 404, responseHttpStatus: 200, responsePagePath: '/index.html' },
       ],
+    });
+
+    const cloudFrontAliasTarget = route53.RecordTarget.fromAlias(
+      new route53Targets.CloudFrontTarget(distribution),
+    );
+    new route53.ARecord(this, 'SiteAliasRecord', {
+      zone: hostedZone,
+      recordName: props.siteDomainName,
+      target: cloudFrontAliasTarget,
+    });
+    new route53.AaaaRecord(this, 'SiteAliasRecordIPv6', {
+      zone: hostedZone,
+      recordName: props.siteDomainName,
+      target: cloudFrontAliasTarget,
     });
 
     // Deploy the Vite build output. Run `npm run build` in the project root
@@ -194,7 +234,8 @@ export class LuxorStack extends cdk.Stack {
     // -----------------------------------------------------------------
     // Outputs
     // -----------------------------------------------------------------
-    new cdk.CfnOutput(this, 'SiteUrl', { value: `https://${distribution.distributionDomainName}` });
+    new cdk.CfnOutput(this, 'SiteUrl', { value: `https://${props.siteDomainName}` });
+    new cdk.CfnOutput(this, 'CloudFrontDomainName', { value: distribution.distributionDomainName });
     new cdk.CfnOutput(this, 'ApiUrl', { value: httpApi.apiEndpoint });
     new cdk.CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });

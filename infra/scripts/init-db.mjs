@@ -32,18 +32,34 @@ function parseArgs(argv) {
 }
 
 // Splits a SQL file into individual statements, keeping $$ ... $$
-// dollar-quoted bodies (used by CREATE FUNCTION) intact instead of
-// splitting on the semicolons inside them.
+// dollar-quoted bodies (used by CREATE FUNCTION) intact and ignoring
+// semicolons inside -- line comments, instead of splitting on every ';'.
 function splitStatements(sql) {
   const statements = [];
   let current = '';
   let i = 0;
   let dollarTag = null; // null when not inside a dollar-quoted block
+  let inLineComment = false;
 
   while (i < sql.length) {
+    const ch = sql[i];
+
+    if (inLineComment) {
+      current += ch;
+      i++;
+      if (ch === '\n') inLineComment = false;
+      continue;
+    }
+
     const rest = sql.slice(i);
 
     if (dollarTag === null) {
+      if (ch === '-' && sql[i + 1] === '-') {
+        current += '--';
+        i += 2;
+        inLineComment = true;
+        continue;
+      }
       const tagMatch = rest.match(/^\$[a-zA-Z_]*\$/);
       if (tagMatch) {
         dollarTag = tagMatch[0];
@@ -51,7 +67,7 @@ function splitStatements(sql) {
         i += dollarTag.length;
         continue;
       }
-      if (sql[i] === ';') {
+      if (ch === ';') {
         const trimmed = current.trim();
         if (trimmed) statements.push(trimmed);
         current = '';
@@ -65,7 +81,7 @@ function splitStatements(sql) {
       continue;
     }
 
-    current += sql[i];
+    current += ch;
     i++;
   }
 
