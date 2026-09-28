@@ -27,19 +27,20 @@ app.post('/', async (c) => {
     return c.json({ error: 'role must be owner, manager, or staff' }, 400);
   }
 
-  const [row] = await query(
-    `with inserted as (
-       insert into staff (name, role, pay_rate_pence, active)
-       values (:name, :role, :payRatePence, true)
-       returning id
-     )
-     ${STAFF_SELECT} where id = (select id from inserted)`,
+  // Two statements, not a data-modifying CTE followed by a SELECT off it —
+  // RDS Data API silently returns zero records for that shape even though
+  // the insert itself commits fine.
+  const [inserted] = await query<{ id: string }>(
+    `insert into staff (name, role, pay_rate_pence, active)
+     values (:name, :role, :payRatePence, true)
+     returning id`,
     {
       name: body.name.trim(),
       role: body.role,
       payRatePence: body.payRatePence ?? 0,
     },
   );
+  const [row] = await query(`${STAFF_SELECT} where id = :id::uuid`, { id: inserted.id });
   return c.json(row, 201);
 });
 

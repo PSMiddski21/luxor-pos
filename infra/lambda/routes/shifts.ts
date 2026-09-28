@@ -25,19 +25,16 @@ interface CreateShiftBody extends Record<string, string> {
 
 app.post('/', async (c) => {
   const body = await c.req.json<CreateShiftBody>();
-  const [row] = await query(
-    `with inserted as (
-       insert into shifts (staff_id, shift_date, planned_start, planned_end)
-       values (:staffId::uuid, :date, :plannedStart, :plannedEnd)
-       returning id, staff_id, shift_date, planned_start, planned_end
-     )
-     select id, staff_id as "staffId",
-            to_char(shift_date, 'YYYY-MM-DD') as "date",
-            to_char(planned_start, 'HH24:MI') as "plannedStart",
-            to_char(planned_end, 'HH24:MI') as "plannedEnd"
-     from inserted`,
+  // Two statements, not a data-modifying CTE followed by a SELECT off it —
+  // RDS Data API silently returns zero records for that shape even though
+  // the insert itself commits fine.
+  const [inserted] = await query<{ id: string }>(
+    `insert into shifts (staff_id, shift_date, planned_start, planned_end)
+     values (:staffId::uuid, :date, :plannedStart, :plannedEnd)
+     returning id`,
     body,
   );
+  const [row] = await query(`${SHIFT_SELECT} where id = :id::uuid`, { id: inserted.id });
   return c.json(row, 201);
 });
 

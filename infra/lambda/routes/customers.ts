@@ -25,13 +25,13 @@ interface CustomerBody {
 
 app.post('/', async (c) => {
   const body = await c.req.json<CustomerBody>();
-  const [row] = await query(
-    `with inserted as (
-       insert into customers (name, phone, email, minutes_balance, notes, terms_accepted)
-       values (:name, :phone, :email, :minutesBalance, :notes, :termsAccepted)
-       returning id
-     )
-     ${CUSTOMER_SELECT} where id = (select id from inserted)`,
+  // Two statements, not a data-modifying CTE followed by a SELECT off it —
+  // RDS Data API silently returns zero records for that shape even though
+  // the insert itself commits fine.
+  const [inserted] = await query<{ id: string }>(
+    `insert into customers (name, phone, email, minutes_balance, notes, terms_accepted)
+     values (:name, :phone, :email, :minutesBalance, :notes, :termsAccepted)
+     returning id`,
     {
       name: body.name,
       phone: body.phone ?? null,
@@ -41,6 +41,7 @@ app.post('/', async (c) => {
       termsAccepted: body.termsAccepted ?? false,
     },
   );
+  const [row] = await query(`${CUSTOMER_SELECT} where id = :id::uuid`, { id: inserted.id });
   return c.json(row, 201);
 });
 
