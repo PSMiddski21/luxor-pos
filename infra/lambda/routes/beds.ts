@@ -36,12 +36,12 @@ app.patch('/:id', async (c) => {
     return c.json({ error: 'status must be available or maintenance' }, 400);
   }
 
-  await query(`update beds set status = :status, busy_until = null where id = :id`, {
+  await query(`update beds set status = :status, busy_until = null where id = :id::uuid`, {
     id,
     status: body.status,
   });
 
-  const [row] = await query(`${BED_SELECT} where id = :id`, { id });
+  const [row] = await query(`${BED_SELECT} where id = :id::uuid`, { id });
   return c.json(row);
 });
 

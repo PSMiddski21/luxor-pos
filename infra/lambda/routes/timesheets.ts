@@ -19,7 +19,7 @@ app.post('/clock-in', async (c) => {
   const body = await c.req.json<{ staffId: string; shiftId?: string }>();
 
   const alreadyIn = await query(
-    `select id from timesheets where staff_id = :staffId and clock_out is null`,
+    `select id from timesheets where staff_id = :staffId::uuid and clock_out is null`,
     { staffId: body.staffId },
   );
   if (alreadyIn.length > 0) {
@@ -45,7 +45,7 @@ app.post('/:id/clock-out', async (c) => {
   const id = c.req.param('id');
   const [row] = await query(
     `with updated as (
-       update timesheets set clock_out = now() where id = :id and clock_out is null
+       update timesheets set clock_out = now() where id = :id::uuid and clock_out is null
        returning id, staff_id, shift_id, clock_in, clock_out
      )
      select id, staff_id as "staffId", shift_id as "shiftId",

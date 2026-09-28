@@ -6,7 +6,8 @@ truncate table transaction_lines, transactions, timesheets, shifts, stock_items,
 insert into beds (id, label, status) values
   ('11111111-0000-0000-0000-000000000001', 'Bed 1', 'available'),
   ('11111111-0000-0000-0000-000000000002', 'Bed 2', 'available'),
-  ('11111111-0000-0000-0000-000000000003', 'Bed 3', 'maintenance');
+  ('11111111-0000-0000-0000-000000000003', 'Bed 3', 'maintenance'),
+  ('11111111-0000-0000-0000-000000000004', 'Bed 4', 'available');
 
 insert into customers (id, name, phone, minutes_balance) values
   ('22222222-0000-0000-0000-000000000001', 'Chloe Bennett', '07700 900001', 80),

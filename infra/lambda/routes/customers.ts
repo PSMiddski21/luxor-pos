@@ -49,31 +49,31 @@ app.patch('/:id', async (c) => {
   const body = await c.req.json<Partial<CustomerBody>>();
 
   if (typeof body.name === 'string') {
-    await query(`update customers set name = :name where id = :id`, { id, name: body.name });
+    await query(`update customers set name = :name where id = :id::uuid`, { id, name: body.name });
   }
   if ('phone' in body) {
-    await query(`update customers set phone = :phone where id = :id`, { id, phone: body.phone ?? null });
+    await query(`update customers set phone = :phone where id = :id::uuid`, { id, phone: body.phone ?? null });
   }
   if ('email' in body) {
-    await query(`update customers set email = :email where id = :id`, { id, email: body.email ?? null });
+    await query(`update customers set email = :email where id = :id::uuid`, { id, email: body.email ?? null });
   }
   if (typeof body.minutesBalance === 'number') {
-    await query(`update customers set minutes_balance = :minutesBalance where id = :id`, {
+    await query(`update customers set minutes_balance = :minutesBalance where id = :id::uuid`, {
       id,
       minutesBalance: body.minutesBalance,
     });
   }
   if ('notes' in body) {
-    await query(`update customers set notes = :notes where id = :id`, { id, notes: body.notes ?? null });
+    await query(`update customers set notes = :notes where id = :id::uuid`, { id, notes: body.notes ?? null });
   }
   if (typeof body.termsAccepted === 'boolean') {
-    await query(`update customers set terms_accepted = :termsAccepted where id = :id`, {
+    await query(`update customers set terms_accepted = :termsAccepted where id = :id::uuid`, {
       id,
       termsAccepted: body.termsAccepted,
     });
   }
 
-  const [row] = await query(`${CUSTOMER_SELECT} where id = :id`, { id });
+  const [row] = await query(`${CUSTOMER_SELECT} where id = :id::uuid`, { id });
   return c.json(row);
 });
 
@@ -114,7 +114,7 @@ app.post('/import', async (c) => {
              email = coalesce(:email, email),
              minutes_balance = coalesce(:minutesBalance, minutes_balance),
              notes = coalesce(:notes, notes)
-           where id = :id`,
+           where id = :id::uuid`,
           {
             id: existing.id,
             phone: r.phone ?? null,

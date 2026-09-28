@@ -28,7 +28,7 @@ app.post('/', async (c) => {
   const [row] = await query(
     `with inserted as (
        insert into shifts (staff_id, shift_date, planned_start, planned_end)
-       values (:staffId, :date, :plannedStart, :plannedEnd)
+       values (:staffId::uuid, :date, :plannedStart, :plannedEnd)
        returning id, staff_id, shift_date, planned_start, planned_end
      )
      select id, staff_id as "staffId",
@@ -43,7 +43,7 @@ app.post('/', async (c) => {
 
 app.delete('/:id', async (c) => {
   const id = c.req.param('id');
-  await query(`delete from shifts where id = :id`, { id });
+  await query(`delete from shifts where id = :id::uuid`, { id });
   return c.body(null, 204);
 });
 

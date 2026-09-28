@@ -49,25 +49,25 @@ app.patch('/:id', async (c) => {
 
   if (typeof body.name === 'string') {
     if (!body.name.trim()) return c.json({ error: 'Name is required' }, 400);
-    await query(`update staff set name = :name where id = :id`, { id, name: body.name.trim() });
+    await query(`update staff set name = :name where id = :id::uuid`, { id, name: body.name.trim() });
   }
   if (typeof body.role === 'string') {
     if (!['owner', 'manager', 'staff'].includes(body.role)) {
       return c.json({ error: 'role must be owner, manager, or staff' }, 400);
     }
-    await query(`update staff set role = :role where id = :id`, { id, role: body.role });
+    await query(`update staff set role = :role where id = :id::uuid`, { id, role: body.role });
   }
   if (typeof body.payRatePence === 'number') {
-    await query(`update staff set pay_rate_pence = :payRatePence where id = :id`, {
+    await query(`update staff set pay_rate_pence = :payRatePence where id = :id::uuid`, {
       id,
       payRatePence: body.payRatePence,
     });
   }
   if (typeof body.active === 'boolean') {
-    await query(`update staff set active = :active where id = :id`, { id, active: body.active });
+    await query(`update staff set active = :active where id = :id::uuid`, { id, active: body.active });
   }
 
-  const [row] = await query(`${STAFF_SELECT} where id = :id`, { id });
+  const [row] = await query(`${STAFF_SELECT} where id = :id::uuid`, { id });
   return c.json(row);
 });
 

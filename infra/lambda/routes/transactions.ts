@@ -25,7 +25,7 @@ app.post('/', async (c) => {
   let sessionMinutes = 0;
   for (const line of body.lines) {
     const [product] = await query<{ pricePence: number; category: string; minutes: number | null }>(
-      `select price_pence as "pricePence", category, minutes from products where id = :productId`,
+      `select price_pence as "pricePence", category, minutes from products where id = :productId::uuid`,
       { productId: line.productId },
     );
     if (!product) return c.json({ error: `Unknown product ${line.productId}` }, 400);
@@ -66,7 +66,7 @@ app.post('/', async (c) => {
     if (body.customerId) {
       await query(
         `update transactions set minutes_balance_after = (select minutes_balance from customers where id = :customerId::uuid)
-         where id = :id`,
+         where id = :id::uuid`,
         { id: txRow.id, customerId: body.customerId },
         { transactionId: txId },
       );
@@ -91,7 +91,7 @@ app.post('/', async (c) => {
     `select id, occurred_at as "occurredAt", customer_id as "customerId", bed_id as "bedId",
             cash_pence as "cashPence", card_pence as "cardPence", total_pence as "totalPence",
             minutes_balance_after as "minutesBalanceAfter"
-     from transactions where id = :id`,
+     from transactions where id = :id::uuid`,
     { id: transactionId },
   );
   const lines = await query(
@@ -99,7 +99,7 @@ app.post('/', async (c) => {
             tl.unit_price_pence as "unitPricePence", tl.minutes_applied as "minutesApplied"
      from transaction_lines tl
      join products p on p.id = tl.product_id
-     where tl.transaction_id = :id`,
+     where tl.transaction_id = :id::uuid`,
     { id: transactionId },
   );
 
@@ -146,7 +146,7 @@ app.post('/use-minutes', async (c) => {
 
       await query(
         `update transactions set minutes_balance_after = (select minutes_balance from customers where id = :customerId::uuid)
-         where id = :id`,
+         where id = :id::uuid`,
         { id: txRow.id, customerId: body.customerId },
         { transactionId: txId },
       );
@@ -171,7 +171,7 @@ app.post('/use-minutes', async (c) => {
     `select id, occurred_at as "occurredAt", customer_id as "customerId", bed_id as "bedId",
             cash_pence as "cashPence", card_pence as "cardPence", total_pence as "totalPence",
             minutes_balance_after as "minutesBalanceAfter"
-     from transactions where id = :id`,
+     from transactions where id = :id::uuid`,
     { id: transactionId },
   );
   const lines = await query(
@@ -179,7 +179,7 @@ app.post('/use-minutes', async (c) => {
             tl.quantity, tl.unit_price_pence as "unitPricePence", tl.minutes_applied as "minutesApplied"
      from transaction_lines tl
      left join products p on p.id = tl.product_id
-     where tl.transaction_id = :id`,
+     where tl.transaction_id = :id::uuid`,
     { id: transactionId },
   );
 

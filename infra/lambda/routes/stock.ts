@@ -71,10 +71,10 @@ app.post('/', async (c) => {
   const [product] = await query(
     `select id, name, category, price_pence as "pricePence",
             cost_price_pence as "costPricePence", minutes, track_stock as "trackStock", active
-     from products where id = :id`,
+     from products where id = :id::uuid`,
     { id: productId },
   );
-  const [stockItem] = await query(`${STOCK_SELECT} where product_id = :id`, { id: productId });
+  const [stockItem] = await query(`${STOCK_SELECT} where product_id = :id::uuid`, { id: productId });
 
   return c.json({ product, stockItem }, 201);
 });
@@ -93,24 +93,24 @@ app.patch('/:productId', async (c) => {
     await query(
       `update stock_items
        set quantity_on_hand = greatest(0, quantity_on_hand + :delta), updated_at = now()
-       where product_id = :productId`,
+       where product_id = :productId::uuid`,
       { productId, delta: body.delta },
     );
   }
   if (typeof body.quantityOnHand === 'number') {
     await query(
-      `update stock_items set quantity_on_hand = :qty, updated_at = now() where product_id = :productId`,
+      `update stock_items set quantity_on_hand = :qty, updated_at = now() where product_id = :productId::uuid`,
       { productId, qty: Math.max(0, body.quantityOnHand) },
     );
   }
   if (typeof body.reorderLevel === 'number') {
     await query(
-      `update stock_items set reorder_level = :level, updated_at = now() where product_id = :productId`,
+      `update stock_items set reorder_level = :level, updated_at = now() where product_id = :productId::uuid`,
       { productId, level: Math.max(0, body.reorderLevel) },
     );
   }
 
-  const [row] = await query(`${STOCK_SELECT} where product_id = :productId`, { productId });
+  const [row] = await query(`${STOCK_SELECT} where product_id = :productId::uuid`, { productId });
   return c.json(row);
 });
 
