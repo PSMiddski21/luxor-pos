@@ -204,9 +204,12 @@ export class LuxorStack extends cdk.Stack {
     });
 
     // Deploy the Vite build output. Run `npm run build` in the project root
-    // before `cdk deploy` so ../dist exists.
+    // before `cdk deploy` so ../dist exists. config.json is excluded here —
+    // Vite copies public/config.json (a local dev placeholder) into dist/
+    // verbatim, and without this exclusion it's a coin flip against the
+    // DeployConfig write below for which one CloudFormation applies last.
     new s3deploy.BucketDeployment(this, 'DeploySite', {
-      sources: [s3deploy.Source.asset(path.join(__dirname, '..', '..', 'dist'))],
+      sources: [s3deploy.Source.asset(path.join(__dirname, '..', '..', 'dist'), { exclude: ['config.json'] })],
       destinationBucket: siteBucket,
       distribution,
       distributionPaths: ['/*'],
